@@ -1,0 +1,472 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>SJCIT — Campus Navigator</title>
+
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+
+<style>
+/* ============================
+   GENERAL STYLES
+============================ */
+:root{
+  --brand:#0b63d4;
+  --muted:#6b7280;
+  --card:#fff;
+}
+
+html,body{
+  height:100%; margin:0; overflow:hidden;
+  font-family:Inter,system-ui,-apple-system,Segoe UI,Roboto,'Helvetica Neue';
+}
+
+/* ============================
+   WELCOME PAGE
+============================ */
+#welcomeScreen{
+  position:fixed; inset:0;
+  background:#1653cd;
+  display:flex;flex-direction:column;
+  justify-content:center;align-items:center;
+  z-index:5000;
+}
+
+.welcomeBox{
+  background:white;
+  padding:30px;
+  width:330px;
+  border-radius:14px;
+  box-shadow:0 8px 30px rgba(0,0,0,0.15);
+  text-align:center;
+}
+
+.welcomeBox h2{
+  margin:0 0 8px;
+  font-size:22px;font-weight:800;color:#0b63d4;
+}
+
+.welcomeBox p{
+  font-size:13px;color:#555;margin-bottom:20px;
+}
+
+.inputField{
+  width:100%;padding:10px;font-size:15px;
+  margin-bottom:14px;border-radius:10px;border:1px solid #ccc;
+}
+
+#startBtn{
+  width:100%;padding:12px;
+  background:#0b63d4;color:white;
+  border-radius:10px;border:0;font-weight:800;font-size:15px;
+  cursor:pointer;
+}
+
+/* ============================
+   MAP + NAVIGATOR UI
+============================ */
+#map{ position:fixed; inset:0; z-index:0; display:none; }
+
+/* LEFT MENU BUTTON */
+#menuBtn {
+  position:fixed; left:14px; top:14px; z-index:1500;
+  width:44px;height:44px;border-radius:10px;border:0;
+  background:var(--card);box-shadow:0 6px 18px rgba(188, 184, 184, 0.12);
+  display:flex;align-items:center;justify-content:center;cursor:pointer;
+  display:none;
+}
+
+/* LEFT SLIDING PANEL */
+#panel {
+  position:fixed;left:0;top:0;height:100%;width:300px;z-index:1450;
+  background:#e9e4e4;transform:translateX(-320px);
+  transition:.32s;box-shadow:4px 0 30px rgba(0,0,0,0.15);
+  padding:14px;display:flex;flex-direction:column;gap:12px;
+  display:none;
+}
+#panel.open { transform:translateX(0); }
+
+.panel-header{display:flex;align-items:center;gap:10px;}
+.title{font-weight:800;font-size:16px;}
+.blocks{display:flex;flex-direction:column;gap:8px;overflow-y:auto;max-height:60vh;}
+
+.blockCard{
+  padding:8px;border-radius:10px;border:1px solid rgba(221, 217, 217, 0.08);
+  display:flex;gap:12px;cursor:pointer;background:#e9e4e4;
+}
+.badge{width:44px;height:44px;border-radius:8px;background:var(--brand);
+  color:white;font-weight:700;display:flex;align-items:center;justify-content:center;
+}
+.blockName{font-weight:700;color:rgb(255, 255, 255);}
+
+#destSelect{
+  width:100%;padding:8px;border-radius:10px;
+  border:1px solid rgba(243, 241, 241, 0.15);
+}
+#goBtn{
+  padding:10px;border-radius:10px;border:0;background:var(--brand);
+  font-size:15px;font-weight:800;color:#e4e4e4;display:none;cursor:pointer;
+}
+
+/* RIGHT INFO PANEL */
+#infoBox {
+  position:fixed;top:0;right:0;width:320px;height:100%;
+  background:rgba(35, 33, 33, 0.8);backdrop-filter:blur(20px);
+  transform:translateX(400px);
+  transition:.35s;z-index:2000;
+  border-left:1px solid rgba(203, 199, 199, 0.1);
+  display:flex;flex-direction:column;
+  display:none;
+}
+#infoBox.open { transform:translateX(0); }
+
+.infoHeader{
+  padding:20px;background:linear-gradient(135deg,#0b63d4,#004bb5);
+  color:rgb(13, 11, 11);border-bottom:1px solid #004bb5;
+}
+.infoTitle{font-size:20px;font-weight:800;}
+.infoSub{font-size:13px;opacity:.85;}
+
+.infoContent{padding:18px;overflow-y:auto;flex:1;}
+.infoItem{
+  padding:10px 0;border-bottom:1px solid rgba(0,0,0,0.08);
+  font-size:14px;color:#e6dddd;
+}
+
+/* TOP RIGHT CONTROLS */
+.topControls{
+  position:fixed;right:18px;top:18px;z-index:1600;
+  display:flex;gap:8px;display:none;
+}
+.smallBtn{
+  background:#f1eded;border-radius:8px;padding:8px;
+  border:1px solid rgba(15, 10, 10, 0.15);
+  cursor:pointer;box-shadow:0 4px 16px rgba(0,0,0,0.1);
+}
+
+/* INFO IMAGE */
+.infoImage{
+  width:100%;height:180px;border-radius:10px;
+  object-fit:cover;margin-bottom:12px;
+  background:#f5f0f0;
+}
+
+</style>
+</head>
+
+<body>
+
+<!-- ============================
+     WELCOME SCREEN
+============================ -->
+<div id="welcomeScreen">
+  <div class="welcomeBox">
+    <h2>Welcome to SJCIT Navigator</h2>
+    <p>Please enter your details to continue</p>
+
+    <input type="text" id="userName" class="inputField" placeholder="Enter your name">
+    <input type="email" id="userEmail" class="inputField" placeholder="Enter your email">
+
+    <button id="startBtn">Start Navigation</button>
+  </div>
+</div>
+
+<!-- ============================
+     MAP + NAVIGATOR
+============================ -->
+<div id="map"></div>
+
+<button id="menuBtn">
+  <svg width="20" height="20" viewBox="0 0 24 24"><path d="M3 6h18M3 12h18M3 18h18" stroke="#000" stroke-width="2" stroke-linecap="round"/></svg>
+</button>
+
+<aside id="panel">
+  <div class="panel-header">
+    <div class="title">Navigator</div>
+    <button id="closePanel" style="margin-left:auto;border:0;background:none;font-size:20px;">✕</button>
+  </div>
+
+  <select id="destSelect"><option value="">Select Block</option></select>
+  <div class="blocks" id="blocksList"></div>
+  <button id="goBtn">LET'S GO!</button>
+</aside>
+
+<div id="infoBox">
+  <button id="closeInfo" style="position:absolute;top:12px;right:12px;font-size:22px;border:0;background:none;color:rgb(230, 218, 218);">✕</button>
+  <div class="infoHeader">
+    <div class="infoTitle">Block</div>
+    <div class="infoSub">Details</div>
+  </div>
+  <div class="infoContent" id="infoList"></div>
+</div>
+
+<div class="topControls">
+  <button id="followBtn" class="smallBtn">Follow</button>
+  <button id="recenterBtn" class="smallBtn">Recenter</button>
+</div>
+
+<!-- ============================
+     SCRIPTS
+============================ -->
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://unpkg.com/leaflet-routing-machine@3.2.12/dist/leaflet-routing-machine.js"></script>
+
+<script>
+
+/* ======================================
+   WELCOME SCREEN → LOAD MAP
+====================================== */
+const welcomeScreen=document.getElementById("welcomeScreen");
+const mapBox=document.getElementById("map");
+const menuBtn=document.getElementById("menuBtn");
+const panel=document.getElementById("panel");
+const infoBox=document.getElementById("infoBox");
+const topControls=document.querySelector(".topControls");
+
+document.getElementById("startBtn").onclick=function(){
+    let name=document.getElementById("userName").value.trim();
+    let email=document.getElementById("userEmail").value.trim();
+
+    if(name==="" || email===""){
+        alert("Please enter both name and email");
+        return;
+    }
+
+    welcomeScreen.style.display="none";
+
+    mapBox.style.display="block";
+    menuBtn.style.display="flex";
+    panel.style.display="flex";
+    infoBox.style.display="flex";
+    topControls.style.display="flex";
+
+    initializeMap();
+};
+
+/* ======================================
+   MAP & FULL NAVIGATION LOGIC
+====================================== */
+function initializeMap(){
+
+/* CAMPUS BOUNDS */
+const campusBounds=L.latLngBounds([13.3938,77.7268],[13.3972,77.7327]);
+
+/* MAP INIT (HD + ANIMATION) */
+window.map=L.map("map",{
+  maxBounds:campusBounds,
+  maxBoundsViscosity:1.0,
+  minZoom:17,
+  maxZoom:23,
+  zoomAnimation:true,
+  fadeAnimation:true
+}).setView([13.3955,77.7295],18);
+
+/* HD GOOGLE TILELAYER */
+L.tileLayer("https://mt1.google.com/vt/lyrs=s&hl=en&x={x}&y={y}&z={z}&s=Ga",{
+  maxZoom:23,
+  noWrap:true,
+  detectRetina:true
+}).addTo(map);
+
+/* SPOTLIGHT MASK */
+const outerWorld=[[-90,-180],[-90,180],[90,180],[90,-180]];
+const campusHole=[[13.3938,77.7268],[13.3972,77.7268],[13.3972,77.7327],[13.3938,77.7327]];
+L.polygon([outerWorld,campusHole],{
+  stroke:false,
+  fillColor:"black",
+  fillOpacity:1.0,
+  interactive:false
+}).addTo(map);
+
+map.on("drag",()=>map.panInsideBounds(campusBounds,{animate:false}));
+
+/* ENTRANCE */
+const ENTRANCE=L.latLng(13.395658660073108,77.72705614897112);
+
+/* BUILDINGS */
+const buildings=[
+  {id:'admin', name:'Admin Block', lat:13.395965567353253, lon:77.72778074342496},
+  {id:'it', name:'IT Block', lat:13.395103924041239, lon:77.72781401068623},
+  {id:'bgs_mgmt', name:'BGS IMS', lat:13.396380210325379, lon:77.72842696070732},
+  {id:'library', name:'SJCIT Library', lat:13.395276504564738, lon:77.72892316937772},
+  {id:'ece', name:'ECE Block', lat:13.394984269564967, lon:77.72901168227418},
+  {id:'civil', name:'Civil Block', lat:13.394984269564967, lon:77.72901168227418},
+  {id:'hockey', name:'Hockey Ground', lat:13.39469855733933, lon:77.72988474130143},
+  {id:'mech', name:'Mechanical Block', lat:13.395306510820893, lon:77.73030584811747},
+  {id:'aero', name:'Aeronautical Dept', lat:13.395423926547803, lon:77.73105954884711},
+  {id:'aerospace', name:'Aerospace Dept', lat:13.395825748842325, lon:77.73118024825483},
+  {id:'bgs_ground', name:'BGS Playground', lat:13.394111476329261, lon:77.73171937226508},
+  {id:'canteen', name:'Canteen', lat:13.394335925920519, lon:77.72909193925825},
+  {id:'aids', name:'AIDS Block', lat:13.394691762289247, lon:77.73069529340911},
+  {id:'auditorium', name:'Auditorium', lat:13.394457178266512, lon:77.73053072915118},
+  {id:'mba', name:'MBA Block', lat:13.394645796519033, lon:77.73083867612888},
+  {id:'transport', name:'Transport Dept', lat:13.394256775327, lon:77.72970729272944},
+  {id:'poly', name:'Polytechnic', lat:13.394690033800291, lon:77.7325431329411},
+];
+
+/* ADD IMAGE SUPPORT */
+const blockInfo = {
+    admin:{title:"Admin Block",subtitle:"Administration",img:"admin.jpeg",items:["Principal Office","Admissions","Finance"]},
+    it:{title:"IT Block",subtitle:"Computing Studies",img:"it.jpeg",items:["CSE","AIML","ISE"]},
+    bgs_mgmt:{title:"BGS IMS",subtitle:"Management",img:"bgs_mgmt.jpeg",items:["MBA","BBA","B.Com"]},
+    library:{title:"Library",subtitle:"Resources",img:"library.jpeg",items:["Study Area","Books","Digital Library"]},
+    ece:{title:"ECE Block",subtitle:"Electronics",img:"ece.jpeg",items:["Labs","Classrooms"]},
+    civil:{title:"Civil Block",subtitle:"Civil Engineering",img:"civil.jpeg",items:["Structures Lab","Survey Lab"]},
+    hockey:{title:"Hockey Ground",subtitle:"Sports",img:"hockey.jpeg",items:["Outdoor Sports"]},
+    mech:{title:"Mechanical Block",subtitle:"Mechanical Engg",img:"mech.jpeg",items:["Workshops","Labs"]},
+    aero:{title:"Aeronautical Dept",subtitle:"Aero Engg",img:"aero.jpeg",items:["Simulation Lab","Aircraft Systems"]},
+    aerospace:{title:"Aerospace Dept",subtitle:"Aerospace",img:"aero.jpeg",items:["Aero Labs"]},
+    bgs_ground:{title:"Playground",subtitle:"Sports Area",img:"bgs_ground.jpeg",items:["Cricket","Football"]},
+    canteen:{title:"Canteen",subtitle:"Food Court",img:"canteen.jpeg",items:["Meals","Snacks"]},
+    aids:{title:"AIDS Block",subtitle:"AI & Data Science",img:"aids.jpeg",items:["AI Lab","DS Lab"]},
+    auditorium:{title:"Auditorium",subtitle:"Events",img:"auditorium.jpeg",items:["Stage","Sound System"]},
+    mba:{title:"MBA Block",subtitle:"PG Studies",img:"mba.jpeg",items:["Seminar Halls","Classrooms"]},
+    transport:{title:"Transport Dept",subtitle:"Transport Office",img:"transport.jpeg",items:["Bus Pass","Driver Room"]},
+    poly:{title:"Polytechnic",subtitle:"Diploma Wing",img:"poly.jpeg",items:["Labs","Classrooms"]},
+  };
+
+/* POPULATE LIST */
+const blocksList=document.getElementById("blocksList");
+const destSelect=document.getElementById("destSelect");
+
+buildings.forEach(b=>{
+  const card=document.createElement("div");
+  card.className="blockCard";
+  card.innerHTML=`<div class="badge">${b.name.slice(0,2)}</div>
+                  <div><div class="blockName">${b.name}</div></div>`;
+  card.onclick=()=>selectBlock(b);
+  blocksList.appendChild(card);
+
+  const op=document.createElement("option");
+  op.value=b.id;op.innerText=b.name;
+  destSelect.appendChild(op);
+});
+
+/* SELECT BLOCK */
+let selected=null,destMarker=null,routeControl=null;
+
+function selectBlock(b){
+  selected=b;
+
+  map.flyTo([b.lat,b.lon],19,{animate:true,duration:.8});
+  setTimeout(()=>map.flyTo([b.lat,b.lon],20,{animate:true,duration:.8}),800);
+
+  if(destMarker) map.removeLayer(destMarker);
+  destMarker=L.marker([b.lat,b.lon]).addTo(map);
+
+  document.getElementById("goBtn").style.display="block";
+  showInfo(b);
+}
+
+/* SHOW INFO */
+const infoList=document.getElementById("infoList");
+
+function showInfo(b){
+  const info=blockInfo[b.id];
+
+  infoList.innerHTML=`
+    <img src="${info.img}" class="infoImage" onerror="this.src=''; this.style.background='#ddd';">
+    <h3>${info.title}</h3>
+    <p style="margin-top:-10px;color:#555;">${info.subtitle}</p>
+    <hr>
+    ${info.items.map(i=>`<div class="infoItem">• ${i}</div>`).join("")}
+  `;
+
+  infoBox.classList.add("open");
+}
+
+document.getElementById("closeInfo").onclick=()=>infoBox.classList.remove("open");
+
+/* ROUTING */
+/* ROUTING (robust: OSRM + fallback + logging) */
+document.getElementById("goBtn").onclick = () => {
+  if (!selected) {
+    alert("Please select a block first.");
+    return;
+  }
+
+  // remove previous route if any
+  if (routeControl) {
+    try { map.removeControl(routeControl); } catch(e){ try { map.removeLayer(routeControl); } catch(_){} }
+    routeControl = null;
+  }
+
+  const from = ENTRANCE;
+  const to = L.latLng(selected.lat, selected.lon);
+
+  // Create routing control with explicit OSRM service URL
+  try {
+    routeControl = L.Routing.control({
+      waypoints: [from, to],
+      router: L.Routing.osrmv1({
+        serviceUrl: "https://routing.openstreetmap.de/routed-foot/route/v1" // public OSRM endpoint
+      }),
+      addWaypoints: false,
+      draggableWaypoints: false,
+      show: false,
+      fitSelectedRoutes: true,
+      createMarker: () => null,
+      lineOptions: { styles: [{ color: "#0b63d4", weight: 6 }] }
+    }).addTo(map);
+
+    // routing success
+    routeControl.on('routesfound', function(e){
+      console.log("Routing: routesfound", e.routes && e.routes.length ? `found ${e.routes.length} route(s)` : "no routes");
+      // If returned routes array empty, fallback below will be triggered by 'routingerror' not always - so handle here too:
+      if(!e.routes || e.routes.length === 0){
+        console.warn("Routing returned no routes. Drawing fallback polyline.");
+        if(routeControl) { try { map.removeControl(routeControl); } catch(e){} routeControl = null; }
+        const fallback = L.polyline([from, to], { color:"#0b63d4", weight:6, opacity:0.95 }).addTo(map);
+        map.fitBounds(fallback.getBounds());
+      }
+    });
+
+    // routing error — fallback to simple polyline and show console error
+    routeControl.on('routingerror', function(err){
+      console.error("Routing error:", err);
+      if(routeControl) { try { map.removeControl(routeControl); } catch(e){} routeControl = null; }
+      const fallback = L.polyline([from, to], { color:"#0b63d4", weight:6, opacity:0.95 }).addTo(map);
+      map.fitBounds(fallback.getBounds());
+      alert("Could not compute a routed path using the online routing service — drawing straight-line fallback.");
+    });
+
+    // Safety timeout: if no response in X seconds, remove and fallback.
+    const ROUTE_TIMEOUT_MS = 7000;
+    const routeTimer = setTimeout(()=>{
+      if(routeControl && !routeControl._routes){ // no routes found yet
+        console.warn("Routing timed out — using fallback polyline.");
+        try { map.removeControl(routeControl); } catch(e){}
+        routeControl = L.polyline([from, to], { color:"#0b63d4", weight:6, opacity:0.95 }).addTo(map);
+        map.fitBounds(routeControl.getBounds());
+      }
+    }, ROUTE_TIMEOUT_MS);
+
+    // Clear the timer once routes found or error happens
+    routeControl.on('routesfound routingerror', ()=> clearTimeout(routeTimer));
+
+  } catch (ex) {
+    console.error("Routing setup failed:", ex);
+    // Fallback: draw polyline directly
+    routeControl = L.polyline([from, to], { color:"#0b63d4", weight:6, opacity:0.95 }).addTo(map);
+    map.fitBounds(routeControl.getBounds());
+    alert("Routing is temporarily unavailable — drawing a straight path instead.");
+  }
+};
+
+
+
+/* PANEL CONTROL */
+document.getElementById("menuBtn").onclick=()=>panel.classList.toggle("open");
+document.getElementById("closePanel").onclick=()=>panel.classList.remove("open");
+
+/* RE-CENTER */
+document.getElementById("recenterBtn").onclick=()=>map.setView(ENTRANCE,18);
+document.getElementById("followBtn").onclick=()=>map.setView(ENTRANCE,18);
+
+} // end initialize()
+
+</script>
+
+</body>
+</html>
